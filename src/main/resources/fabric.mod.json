@@ -6,7 +6,9 @@
   "description": "Custom drop cleaning tool, supporting scheduled cleaning and range configuration",
   "authors": ["StellarVan"],
   "contact": {
-    "homepage": "https://github.com/mcheheyixiao"},
+    "homepage": "https://github.com/mcheheyixiao",
+    "sources": "https://github.com/mcheheyixiao/itemcleaner",
+    "issues":  "https://github.com/mcheheyixiao/ItemCleaner/issues"},
   "license": "MIT",
   "icon": "assets/itemcleaner/icon.png",
   "environment": "*",
