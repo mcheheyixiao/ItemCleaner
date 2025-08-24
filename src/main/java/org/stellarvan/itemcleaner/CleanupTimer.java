@@ -18,6 +18,8 @@ public class CleanupTimer {
     public MinecraftServer server;
     public int tickCounter = 0;
     public boolean cleanupAnnounced = false;
+    private int thresholdCheckCounter = 0;
+    private int warningCooldown = 0;
 
     public CleanupTimer() {
     }
@@ -26,21 +28,38 @@ public class CleanupTimer {
         this.server = server;
         ItemCleaner.LOGGER.info("服务器实例已设置");
         if (server != null) {
-            ItemCleaner.LOGGER.info("当前清理配置 - 半径: " + ItemCleaner.config.cleanRadius +
-                    "格, Y范围: " + ItemCleaner.config.yMin + "~" + ItemCleaner.config.yMax);
+            int cooldownSeconds = ItemCleaner.config.warningCooldown / 20;
+            ItemCleaner.LOGGER.info("当前清理配置 - 提示冷却时间: " + cooldownSeconds + "秒 (" +
+                    ItemCleaner.config.warningCooldown + "ticks)");
         }
     }
 
     public void tick() {
-        if (server == null) {
-            ItemCleaner.LOGGER.debug("服务器实例为空，跳过tick");
+        if (server == null) return;
+
+        // 检查功能开关
+        if (!ItemCleaner.config.enableAutoCleanup && !ItemCleaner.config.enableThresholdCheck) {
             return;
         }
 
         tickCounter++;
+        thresholdCheckCounter++;
         int interval = ItemCleaner.config.cleanupInterval;
+        int checkInterval = ItemCleaner.config.thresholdCheckInterval;
 
-        if (tickCounter >= interval) {
+        // 冷却计时器递减
+        if (warningCooldown > 0) {
+            warningCooldown--;
+        }
+
+        // 数量检测（如果启用）
+        if (ItemCleaner.config.enableThresholdCheck && thresholdCheckCounter >= checkInterval) {
+            checkItemThreshold();
+            thresholdCheckCounter = 0;
+        }
+
+        // 定时清理（如果启用）
+        if (ItemCleaner.config.enableAutoCleanup && tickCounter >= interval) {
             ItemCleaner.LOGGER.info("达到清理间隔，执行定时清理");
             performCleanup(true);
             tickCounter = 0;
@@ -48,34 +67,74 @@ public class CleanupTimer {
             return;
         }
 
-        if (!cleanupAnnounced) {
+        // 定时清理提示（使用lang文件文本）
+        if (ItemCleaner.config.enableAutoCleanup && !cleanupAnnounced) {
             int remainingTicks = interval - tickCounter;
-
-            if (remainingTicks == 1200 || remainingTicks == 600 || remainingTicks == 100) {
-                sendCleanupWarning(remainingTicks);
-                if (remainingTicks == 100) {
-                    cleanupAnnounced = true;
-                }
+            if (remainingTicks == 1200) { // 1分钟
+                sendCleanupWarning(I18n.text("itemcleaner.warning_1min"));
+            } else if (remainingTicks == 600) { // 30秒
+                sendCleanupWarning(I18n.text("itemcleaner.warning_30s"));
+            } else if (remainingTicks == 100) { // 5秒
+                sendCleanupWarning(I18n.text("itemcleaner.warning_5s"));
+                cleanupAnnounced = true;
             }
         }
     }
 
-    private void sendCleanupWarning(int remainingTicks) {
-        String message;
-        int seconds = remainingTicks / 20;
+    private void checkItemThreshold() {
+        if (server == null) return;
 
-        if (seconds == 60) {
-            message = ItemCleaner.config.warning1Minute;
-        } else if (seconds == 30) {
-            message = ItemCleaner.config.warning30Seconds;
-        } else if (seconds == 5) {
-            message = ItemCleaner.config.warning5Seconds;
-        } else {
-            return;
+        int cleanRadius = ItemCleaner.config.cleanRadius;
+        int yMin = ItemCleaner.config.yMin;
+        int yMax = ItemCleaner.config.yMax;
+        int threshold = ItemCleaner.config.itemThreshold;
+        int cooldownTicks = ItemCleaner.config.warningCooldown;
+
+        if (cleanRadius <= 0) cleanRadius = 48;
+        if (yMin >= yMax) {
+            yMin = -64;
+            yMax = 320;
         }
 
-        server.getPlayerManager().broadcast(Text.literal(message), false);
-        ItemCleaner.LOGGER.info("发送清理提示: " + message.replaceAll("§.", ""));
+        final int finalRadius = cleanRadius;
+        final int finalYMin = yMin;
+        final int finalYMax = yMax;
+
+        server.execute(() -> {
+            AtomicInteger totalCount = new AtomicInteger(0);
+            Set<ItemEntity> countedEntities = new HashSet<>();
+
+            server.getWorlds().forEach(world -> {
+                for (PlayerEntity player : world.getPlayers()) {
+                    Vec3d playerPos = player.getPos();
+                    Box playerRange = new Box(
+                            playerPos.x - finalRadius, finalYMin, playerPos.z - finalRadius,
+                            playerPos.x + finalRadius, finalYMax, playerPos.z + finalRadius
+                    );
+
+                    for (ItemEntity item : world.getEntitiesByClass(
+                            ItemEntity.class, playerRange, entity -> true)) {
+                        if (countedEntities.contains(item)) continue;
+
+                        String itemId = Registries.ITEM.getId(item.getStack().getItem()).toString();
+                        if (ItemCleaner.config.itemsToClean.contains(itemId)) {
+                            totalCount.addAndGet(item.getStack().getCount());
+                            countedEntities.add(item);
+                        }
+                    }
+                }
+            });
+
+            ItemCleaner.LOGGER.debug("当前指定掉落物数量: " + totalCount.get() +
+                    " (阈值: " + threshold + "), 冷却状态: " +
+                    (warningCooldown > 0 ? "剩余" + warningCooldown/20 + "秒" : "就绪"));
+
+            if (totalCount.get() >= threshold && warningCooldown <= 0) {
+                ItemCleaner.LOGGER.info("数量达标且冷却结束，发送清理提示");
+                InteractiveCleanupHandler.sendCleanupPrompt(server, totalCount.get());
+                warningCooldown = cooldownTicks;
+            }
+        });
     }
 
     public void performCleanup(boolean forceNotify) {
@@ -88,77 +147,61 @@ public class CleanupTimer {
         int yMin = ItemCleaner.config.yMin;
         int yMax = ItemCleaner.config.yMax;
 
-        if (cleanRadius <= 0) {
-            ItemCleaner.LOGGER.warn("无效的清理半径配置 (" + cleanRadius + "), 使用默认值48格");
-            cleanRadius = 48;
-        }
+        if (cleanRadius <= 0) cleanRadius = 48;
         if (yMin >= yMax) {
-            ItemCleaner.LOGGER.warn("无效的Y轴范围配置 (" + yMin + "~" + yMax + "), 使用默认范围");
             yMin = -64;
             yMax = 320;
         }
 
-        // 关键修复：创建final副本，供lambda表达式使用
         final int finalRadius = cleanRadius;
         final int finalYMin = yMin;
         final int finalYMax = yMax;
 
         server.execute(() -> {
-            // 检查游戏规则
+            Map<String, Object[]> cleanedItems = new HashMap<>();
+            AtomicInteger totalCleaned = new AtomicInteger(0);
+            Set<ItemEntity> cleanedEntities = new HashSet<>();
+
             boolean doEntityDrops = server.getGameRules().getBoolean(GameRules.DO_ENTITY_DROPS);
             if (!doEntityDrops) {
                 ItemCleaner.LOGGER.info("由于游戏规则设置，跳过清理");
                 if (forceNotify) {
                     server.getPlayerManager().broadcast(
-                            Text.literal("§a[服务器娘] 定时清理已执行，但由于游戏规则设置未清理任何物品§r"),
+                            I18n.prefixedText("itemcleaner.cleanup_none"),
                             false
                     );
                 }
                 return;
             }
 
-            Map<String, Object[]> cleanedItems = new HashMap<>();
-            AtomicInteger totalCleaned = new AtomicInteger(0);
-            Set<ItemEntity> cleanedEntities = new HashSet<>();
-
             server.getWorlds().forEach(world -> {
                 for (PlayerEntity player : world.getPlayers()) {
                     Vec3d playerPos = player.getPos();
-                    // 使用final副本变量，解决lambda引用问题
                     Box playerRange = new Box(
                             playerPos.x - finalRadius, finalYMin, playerPos.z - finalRadius,
                             playerPos.x + finalRadius, finalYMax, playerPos.z + finalRadius
                     );
 
-                    ItemCleaner.LOGGER.debug(
-                            "清理玩家 " + player.getName().getString() + " 周围区域: " +
-                                    "半径=" + finalRadius + "格, " +
-                                    "X: " + (int)(playerPos.x - finalRadius) + "~" + (int)(playerPos.x + finalRadius) +
-                                    ", Y: " + finalYMin + "~" + finalYMax +
-                                    ", Z: " + (int)(playerPos.z - finalRadius) + "~" + (int)(playerPos.z + finalRadius)
-                    );
-
                     for (ItemEntity item : world.getEntitiesByClass(
-                            ItemEntity.class,
-                            playerRange,
-                            entity -> true
-                    )) {
+                            ItemEntity.class, playerRange, entity -> true)) {
                         if (cleanedEntities.contains(item)) continue;
 
                         String itemId = Registries.ITEM.getId(item.getStack().getItem()).toString();
-                        int count = item.getStack().getCount();
-                        String itemName = item.getStack().getName().getString();
-
                         if (ItemCleaner.config.itemsToClean.contains(itemId)) {
-                            item.discard();
-                            cleanedEntities.add(item);
+                            int count = item.getStack().getCount();
+                            String itemName = item.getStack().getName().getString();
+
                             totalCleaned.addAndGet(count);
+                            cleanedEntities.add(item);
 
                             if (cleanedItems.containsKey(itemId)) {
-                                cleanedItems.compute(itemId, (k, data) -> new Object[]{data[0], (int) data[1] + count});
+                                Object[] data = cleanedItems.get(itemId);
+                                cleanedItems.put(itemId, new Object[]{data[0], (int)data[1] + count});
                             } else {
                                 cleanedItems.put(itemId, new Object[]{itemName, count});
                             }
+
+                            item.discard();
                         }
                     }
                 }
@@ -166,11 +209,15 @@ public class CleanupTimer {
 
             sendCleanupStats(cleanedItems, totalCleaned.get(), forceNotify);
             ItemCleaner.LOGGER.info("清理完成，共清理 " + totalCleaned.get() + " 个物品");
+            warningCooldown = 0;
         });
     }
 
-    public void performCleanup() {
-        performCleanup(false);
+    private void sendCleanupWarning(Text message) {
+        server.getPlayerManager().broadcast(
+                Text.translatable("itemcleaner.prefix").append(message),
+                false
+        );
     }
 
     private void sendCleanupStats(Map<String, Object[]> cleanedItems, int total, boolean forceNotify) {
@@ -178,7 +225,7 @@ public class CleanupTimer {
 
         if (total > 0) {
             server.getPlayerManager().broadcast(
-                    Text.literal("§a[服务器娘] 本次清理结果: 共清理 " + total + " 个物品§r"),
+                    I18n.prefixedText("itemcleaner.cleanup_completed", total),
                     false
             );
 
@@ -194,7 +241,7 @@ public class CleanupTimer {
             }
         } else if (forceNotify) {
             server.getPlayerManager().broadcast(
-                    Text.literal("§a[服务器娘] 定时清理已执行，未发现需要清理的掉落物§r"),
+                    I18n.prefixedText("itemcleaner.cleanup_none"),
                     false
             );
         }

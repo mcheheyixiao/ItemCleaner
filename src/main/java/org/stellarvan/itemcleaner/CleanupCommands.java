@@ -6,7 +6,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.command.CommandRegistryAccess;
-import net.minecraft.item.Item;
+import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
 import net.minecraft.server.command.CommandManager;
 import net.minecraft.server.command.ServerCommandSource;
@@ -18,107 +18,221 @@ public class CleanupCommands {
     public static void register(CommandDispatcher<ServerCommandSource> dispatcher,
                                 CommandRegistryAccess registryAccess,
                                 CommandManager.RegistrationEnvironment environment) {
+        // 主命令节点
         dispatcher.register(CommandManager.literal("cleandrops")
                 .requires(source -> source.hasPermissionLevel(2))
-                .executes(CleanupCommands::executeCleanup)
+                // 主命令默认提示
+                .executes(context -> {
+                    context.getSource().sendFeedback(
+                            () -> I18n.text("itemcleaner.help_guide"),
+                            false
+                    );
+                    return 1;
+                })
 
+                // 帮助命令
+                .then(CommandManager.literal("help")
+                        .executes(CleanupCommands::showHelp))
+
+                // 立即清理
+                .then(CommandManager.literal("clean")
+                        .executes(CleanupCommands::executeCleanup))
+
+                // 添加手持物品
                 .then(CommandManager.literal("add")
                         .executes(CleanupCommands::addHeldItem))
 
+                // 移除物品
                 .then(CommandManager.literal("remove")
                         .then(CommandManager.argument("itemId", StringArgumentType.string())
                                 .executes(CleanupCommands::removeItem)))
 
+                // 设置间隔
                 .then(CommandManager.literal("setinterval")
                         .then(CommandManager.argument("ticks", IntegerArgumentType.integer(200))
                                 .executes(CleanupCommands::setInterval)))
 
+                // 列出物品
                 .then(CommandManager.literal("list")
-                        .executes(CleanupCommands::listItems)));
+                        .executes(CleanupCommands::listItems))
+
+                // 切换开关
+                .then(CommandManager.literal("toggle")
+                        .then(CommandManager.literal("auto")
+                                .executes(CleanupCommands::toggleAutoCleanup))
+                        .then(CommandManager.literal("threshold")
+                                .executes(CleanupCommands::toggleThresholdCheck)))
+
+                // 确认清理
+                .then(CommandManager.literal("confirm")
+                        .then(CommandManager.argument("requestId", StringArgumentType.string())
+                                .then(CommandManager.argument("choice", StringArgumentType.string())
+                                        .executes(context -> InteractiveCleanupHandler.handleConfirmation(context)))))
+
+                // 新增：切换语言命令（用于测试）
+                .then(CommandManager.literal("language")
+                        .then(CommandManager.argument("langCode", StringArgumentType.string())
+                                .executes(CleanupCommands::setLanguage))));
     }
 
-    private static int listItems(CommandContext<ServerCommandSource> context) {
+    // 新增：设置语言
+    private static int setLanguage(CommandContext<ServerCommandSource> context) {
+        String langCode = StringArgumentType.getString(context, "langCode");
+        ItemCleaner.config.language = langCode;
+        ItemCleaner.saveConfig();
+        I18n.setLanguage(langCode);
+
+        context.getSource().sendFeedback(
+                () -> I18n.prefixedText("itemcleaner.language_updated", langCode),
+                false
+        );
+        return 1;
+    }
+
+    // 显示帮助信息
+    private static int showHelp(CommandContext<ServerCommandSource> context) {
         ServerCommandSource source = context.getSource();
-        int count = ItemCleaner.config.itemsToClean.size();
 
-        source.sendFeedback(() -> Text.literal("§a清理列表中的物品 (" + count + "个):§r"), false);
-
-        for (String itemId : ItemCleaner.config.itemsToClean) {
-            Identifier identifier = Identifier.of(itemId);
-            Item item = Registries.ITEM.get(identifier);
-            String itemName = item.getDefaultStack().getName().getString();
-
-            source.sendFeedback(() -> Text.literal(
-                    "§b- " + itemName + " §7(" + itemId + ")§r"
-            ), false);
-        }
+        source.sendFeedback(() -> I18n.text("itemcleaner.help_title"), false);
+        source.sendFeedback(() -> I18n.text("itemcleaner.help_command_help"), false);
+        source.sendFeedback(() -> I18n.text("itemcleaner.help_command_clean"), false);
+        source.sendFeedback(() -> I18n.text("itemcleaner.help_command_add"), false);
+        source.sendFeedback(() -> I18n.text("itemcleaner.help_command_remove"), false);
+        source.sendFeedback(() -> I18n.text("itemcleaner.help_command_setinterval"), false);
+        source.sendFeedback(() -> I18n.text("itemcleaner.help_command_list"), false);
+        source.sendFeedback(() -> I18n.text("itemcleaner.help_command_toggle_auto"), false);
+        source.sendFeedback(() -> I18n.text("itemcleaner.help_command_toggle_threshold"), false);
+        source.sendFeedback(() -> I18n.text("itemcleaner.help_command_language"), false); // 新增
+        source.sendFeedback(() -> I18n.text("itemcleaner.help_note"), false);
 
         return 1;
     }
 
+    // 其他方法保持不变...
     private static int executeCleanup(CommandContext<ServerCommandSource> context) {
-        ItemCleaner.cleanupTimer.performCleanup();
-        context.getSource().sendFeedback(() -> Text.literal("§a已立即清理掉落物§r"), true);
+        context.getSource().sendFeedback(
+                () -> I18n.prefixedText("itemcleaner.cleanup_start"),
+                true
+        );
+        ItemCleaner.cleanupTimer.performCleanup(true);
         return 1;
     }
 
     private static int addHeldItem(CommandContext<ServerCommandSource> context) throws CommandSyntaxException {
         ServerPlayerEntity player = context.getSource().getPlayerOrThrow();
-        if (player.getMainHandStack().isEmpty()) {
-            context.getSource().sendFeedback(() -> Text.literal("§c你手中没有物品§r"), false);
+        ItemStack heldStack = player.getMainHandStack();
+
+        if (heldStack.isEmpty()) {
+            context.getSource().sendFeedback(
+                    () -> I18n.prefixedText("itemcleaner.no_item_held"),
+                    false
+            );
             return 0;
         }
 
-        String itemId = Registries.ITEM.getId(player.getMainHandStack().getItem()).toString();
-        if (!ItemCleaner.config.itemsToClean.contains(itemId)) {
-            ItemCleaner.config.itemsToClean.add(itemId);
-            ItemCleaner.saveConfig();
-            String itemName = player.getMainHandStack().getName().getString();
-            context.getSource().sendFeedback(() -> Text.literal(
-                    "§a已将 " + itemName + " §7(" + itemId + ")§a 添加到清理列表§r"
-            ), true);
+        Identifier itemId = Registries.ITEM.getId(heldStack.getItem());
+        String itemIdStr = itemId.toString();
+
+        if (!ItemCleaner.config.itemsToClean.contains(itemIdStr)) {
+            ItemCleaner.config.itemsToClean.add(itemIdStr);
+            CleanupConfig.saveConfig(ItemCleaner.config);
+
+            context.getSource().sendFeedback(
+                    () -> I18n.prefixedText("itemcleaner.item_added", itemIdStr),
+                    false
+            );
         } else {
-            context.getSource().sendFeedback(() -> Text.literal(
-                    "§e" + itemId + " 已在清理列表中§r"
-            ), false);
+            context.getSource().sendFeedback(
+                    () -> I18n.prefixedText("itemcleaner.item_already_present", itemIdStr),
+                    false
+            );
         }
+
         return 1;
     }
 
     private static int removeItem(CommandContext<ServerCommandSource> context) {
         String itemId = StringArgumentType.getString(context, "itemId");
-        String itemName;
-        Identifier identifier = Identifier.of(itemId);
-        if (Registries.ITEM.containsId(identifier)) {
-            itemName = Registries.ITEM.get(identifier).getDefaultStack().getName().getString();
-        } else {
-            itemName = "未知物品";
-        }
 
         if (ItemCleaner.config.itemsToClean.remove(itemId)) {
-            ItemCleaner.saveConfig();
-            context.getSource().sendFeedback(() -> Text.literal(
-                    "§a已将 " + itemName + " §7(" + itemId + ")§a 从清理列表移除§r"
-            ), true);
+            CleanupConfig.saveConfig(ItemCleaner.config);
+            context.getSource().sendFeedback(
+                    () -> I18n.prefixedText("itemcleaner.item_removed", itemId),
+                    false
+            );
         } else {
-            context.getSource().sendFeedback(() -> Text.literal(
-                    "§c" + itemId + " 不在清理列表中§r"
-            ), false);
+            context.getSource().sendFeedback(
+                    () -> I18n.prefixedText("itemcleaner.item_not_found", itemId),
+                    false
+            );
         }
+
         return 1;
     }
 
     private static int setInterval(CommandContext<ServerCommandSource> context) {
         int ticks = IntegerArgumentType.getInteger(context, "ticks");
         ItemCleaner.config.cleanupInterval = ticks;
-        ItemCleaner.saveConfig();
+        CleanupConfig.saveConfig(ItemCleaner.config);
 
-        ItemCleaner.cleanupTimer.tickCounter = 0;
-        ItemCleaner.cleanupTimer.cleanupAnnounced = false;
+        context.getSource().sendFeedback(
+                () -> I18n.prefixedText("itemcleaner.interval_updated", ticks),
+                false
+        );
+        return 1;
+    }
 
-        context.getSource().sendFeedback(() -> Text.literal(
-                "§a已设置清理间隔为 " + ticks + " ticks（约 " + ticks/20 + " 秒）§r"
-        ), true);
+    private static int listItems(CommandContext<ServerCommandSource> context) {
+        context.getSource().sendFeedback(
+                () -> I18n.text("itemcleaner.list_title"),
+                false
+        );
+
+        if (ItemCleaner.config.itemsToClean.isEmpty()) {
+            context.getSource().sendFeedback(
+                    () -> I18n.text("itemcleaner.list_empty"),
+                    false
+            );
+            return 1;
+        }
+
+        for (String itemId : ItemCleaner.config.itemsToClean) {
+            context.getSource().sendFeedback(
+                    () -> Text.literal("§7- " + itemId),
+                    false
+            );
+        }
+
+        return 1;
+    }
+
+    private static int toggleAutoCleanup(CommandContext<ServerCommandSource> context) {
+        ItemCleaner.config.enableAutoCleanup = !ItemCleaner.config.enableAutoCleanup;
+        CleanupConfig.saveConfig(ItemCleaner.config);
+
+        String messageKey = ItemCleaner.config.enableAutoCleanup
+                ? "itemcleaner.toggle_auto_enabled"
+                : "itemcleaner.toggle_auto_disabled";
+
+        context.getSource().sendFeedback(
+                () -> I18n.prefixedText(messageKey),
+                true
+        );
+        return 1;
+    }
+
+    private static int toggleThresholdCheck(CommandContext<ServerCommandSource> context) {
+        ItemCleaner.config.enableThresholdCheck = !ItemCleaner.config.enableThresholdCheck;
+        CleanupConfig.saveConfig(ItemCleaner.config);
+
+        String messageKey = ItemCleaner.config.enableThresholdCheck
+                ? "itemcleaner.toggle_threshold_enabled"
+                : "itemcleaner.toggle_threshold_disabled";
+
+        context.getSource().sendFeedback(
+                () -> I18n.prefixedText(messageKey),
+                true
+        );
         return 1;
     }
 }
