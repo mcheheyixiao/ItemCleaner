@@ -38,5 +38,12 @@
   "itemcleaner.interval_updated": "§aAuto-clean interval updated to %d ticks§r",
   "itemcleaner.interval_invalid": "§cInvalid interval (minimum 200 ticks)§r",
   "itemcleaner.list_title": "§a===== Cleanup List =====",
-  "itemcleaner.list_empty": "§eCleanup list is empty§r"
+  "itemcleaner.list_empty": "§eCleanup list is empty§r",
+  "itemcleaner.log.mod_loaded": "Mod loaded",
+  "itemcleaner.log.server_instance_set": "Server instance set",
+  "itemcleaner.log.cleanup_config": "Current cleanup config - Enabled: %b, Warning cooldown: %d seconds (%d ticks)",
+  "itemcleaner.log.threshold_config": "Threshold check config - Enabled: %b, Check interval: %d ticks, Trigger threshold: %d, Prompt interval: %d",
+  "itemcleaner.log.loading_language": "Loading language: %s",
+  "itemcleaner.log.language_loaded": "Language loaded: %s",
+  "itemcleaner.log.cleanup_range": "Cleanup range - Detection radius: %d blocks"
 }

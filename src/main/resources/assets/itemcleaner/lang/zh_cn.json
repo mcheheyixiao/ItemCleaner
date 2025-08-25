@@ -38,5 +38,12 @@
   "itemcleaner.interval_updated": "§a自动清理间隔已更新为 %d ticks§r",
   "itemcleaner.interval_invalid": "§c无效的间隔值（最低200 ticks）§r",
   "itemcleaner.list_title": "§a===== 清理列表 =====",
-  "itemcleaner.list_empty": "§e清理列表为空§r"
+  "itemcleaner.list_empty": "§e清理列表为空§r",
+  "itemcleaner.log.mod_loaded": "模组已加载",
+  "itemcleaner.log.server_instance_set": "服务器实例已设置",
+  "itemcleaner.log.cleanup_config": "当前清理配置 - 是否启用: %b, 提示冷却时间: %d秒 (%d ticks)",
+  "itemcleaner.log.threshold_config": "阈值检测配置 - 是否启用: %b, 检测间隔: %d ticks, 触发阈值: %d, 提示间隔: %d",
+  "itemcleaner.log.loading_language": "加载语言: %s",
+  "itemcleaner.log.language_loaded": "语言加载完成: %s",
+  "itemcleaner.log.cleanup_range": "清理范围 - 检测范围: %d 格(半径)"
 }
