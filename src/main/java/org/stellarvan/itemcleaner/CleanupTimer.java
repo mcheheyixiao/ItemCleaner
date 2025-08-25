@@ -26,11 +26,15 @@ public class CleanupTimer {
 
     public void setServer(MinecraftServer server) {
         this.server = server;
-        ItemCleaner.LOGGER.info("服务器实例已设置");
+        ItemCleaner.LOGGER.info("[ItemClenaer]服务器实例已设置");
         if (server != null) {
             int cooldownSeconds = ItemCleaner.config.warningCooldown / 20;
-            ItemCleaner.LOGGER.info("当前清理配置 - 提示冷却时间: " + cooldownSeconds + "秒 (" +
+            ItemCleaner.LOGGER.info("[ItemClenaer]当前清理配置 - 提示冷却时间: " + cooldownSeconds + "秒 (" +
                     ItemCleaner.config.warningCooldown + "ticks)");
+            // 新增：输出阈值检测配置
+            ItemCleaner.LOGGER.info("[ItemClenaer]阈值检测配置 - 启用: " + ItemCleaner.config.enableThresholdCheck +
+                    ", 检测间隔: " + ItemCleaner.config.thresholdCheckInterval + "ticks, " +
+                    "触发阈值: " + ItemCleaner.config.itemThreshold);
         }
     }
 
@@ -52,10 +56,25 @@ public class CleanupTimer {
             warningCooldown--;
         }
 
-        // 数量检测（如果启用）
-        if (ItemCleaner.config.enableThresholdCheck && thresholdCheckCounter >= checkInterval) {
-            checkItemThreshold();
-            thresholdCheckCounter = 0;
+        // 数量检测（如果启用）- 修复：添加调试日志并确保checkInterval有效
+        if (ItemCleaner.config.enableThresholdCheck) {
+            // 确保检测间隔有效
+            if (checkInterval <= 0) {
+                checkInterval = 200; // 默认200ticks(10秒)
+                ItemCleaner.LOGGER.warn("阈值检测间隔配置无效，使用默认值: " + checkInterval + "ticks");
+            }
+
+            // 新增：跟踪计数器状态
+            if (thresholdCheckCounter % 100 == 0) {
+                ItemCleaner.LOGGER.debug("阈值检测计数器 - 当前: " + thresholdCheckCounter +
+                        ", 间隔: " + checkInterval);
+            }
+
+            if (thresholdCheckCounter >= checkInterval) {
+                ItemCleaner.LOGGER.debug("达到阈值检测间隔，执行检测");
+                checkItemThreshold();
+                thresholdCheckCounter = 0;
+            }
         }
 
         // 定时清理（如果启用）
@@ -67,22 +86,25 @@ public class CleanupTimer {
             return;
         }
 
-        // 定时清理提示（使用lang文件文本）
+        // 定时清理提示
         if (ItemCleaner.config.enableAutoCleanup && !cleanupAnnounced) {
             int remainingTicks = interval - tickCounter;
             if (remainingTicks == 1200) { // 1分钟
-                sendCleanupWarning(I18n.text("itemcleaner.warning_1min"));
+                sendCleanupWarning("itemcleaner.warning_1min");
             } else if (remainingTicks == 600) { // 30秒
-                sendCleanupWarning(I18n.text("itemcleaner.warning_30s"));
+                sendCleanupWarning("itemcleaner.warning_30s");
             } else if (remainingTicks == 100) { // 5秒
-                sendCleanupWarning(I18n.text("itemcleaner.warning_5s"));
+                sendCleanupWarning("itemcleaner.warning_5s");
                 cleanupAnnounced = true;
             }
         }
     }
 
     private void checkItemThreshold() {
-        if (server == null) return;
+        if (server == null) {
+            ItemCleaner.LOGGER.warn("跳过阈值检测：服务器实例为空");
+            return;
+        }
 
         int cleanRadius = ItemCleaner.config.cleanRadius;
         int yMin = ItemCleaner.config.yMin;
@@ -90,21 +112,43 @@ public class CleanupTimer {
         int threshold = ItemCleaner.config.itemThreshold;
         int cooldownTicks = ItemCleaner.config.warningCooldown;
 
-        if (cleanRadius <= 0) cleanRadius = 48;
+        // 验证配置有效性
+        if (threshold <= 0) {
+            ItemCleaner.LOGGER.warn("阈值配置无效(" + threshold + ")，使用默认值: 100");
+            threshold = 100;
+        }
+        if (cleanRadius <= 0) {
+            cleanRadius = 48;
+            ItemCleaner.LOGGER.debug("清理半径无效，使用默认值: " + cleanRadius);
+        }
         if (yMin >= yMax) {
             yMin = -64;
             yMax = 320;
+            ItemCleaner.LOGGER.debug("Y轴范围无效，使用默认值: " + yMin + "~" + yMax);
+        }
+        if (cooldownTicks <= 0) {
+            cooldownTicks = 1200; // 默认60秒
+            ItemCleaner.LOGGER.debug("警告冷却无效，使用默认值: " + cooldownTicks + "ticks");
         }
 
         final int finalRadius = cleanRadius;
         final int finalYMin = yMin;
         final int finalYMax = yMax;
+        final int finalThreshold = threshold;
+        final int finalCooldown = cooldownTicks;
 
         server.execute(() -> {
             AtomicInteger totalCount = new AtomicInteger(0);
             Set<ItemEntity> countedEntities = new HashSet<>();
+            Set<String> detectedItems = new HashSet<>(); // 跟踪检测到的物品ID
 
             server.getWorlds().forEach(world -> {
+                // 新增：验证世界是否加载
+                if (world == null) {
+                    ItemCleaner.LOGGER.debug("跳过空世界的物品检测");
+                    return;
+                }
+
                 for (PlayerEntity player : world.getPlayers()) {
                     Vec3d playerPos = player.getPos();
                     Box playerRange = new Box(
@@ -112,32 +156,53 @@ public class CleanupTimer {
                             playerPos.x + finalRadius, finalYMax, playerPos.z + finalRadius
                     );
 
+                    // 新增：记录检测范围
+                    if (totalCount.get() == 0) { // 只输出一次
+                        ItemCleaner.LOGGER.debug("检测范围 - 玩家: " + player.getName().getString() +
+                                ", 位置: (" + (int)playerPos.x + "," + (int)playerPos.y + "," + (int)playerPos.z + "), " +
+                                "半径: " + finalRadius + ", Y范围: " + finalYMin + "~" + finalYMax);
+                    }
+
+                    // 收集该范围内的所有物品实体
                     for (ItemEntity item : world.getEntitiesByClass(
                             ItemEntity.class, playerRange, entity -> true)) {
                         if (countedEntities.contains(item)) continue;
 
                         String itemId = Registries.ITEM.getId(item.getStack().getItem()).toString();
+                        // 检查物品是否在清理列表中
                         if (ItemCleaner.config.itemsToClean.contains(itemId)) {
-                            totalCount.addAndGet(item.getStack().getCount());
+                            int count = item.getStack().getCount();
+                            totalCount.addAndGet(count);
                             countedEntities.add(item);
+                            detectedItems.add(itemId);
+
+                            ItemCleaner.LOGGER.debug("检测到清理列表物品: " + itemId + " x" + count);
                         }
                     }
                 }
             });
 
-            ItemCleaner.LOGGER.debug("当前指定掉落物数量: " + totalCount.get() +
-                    " (阈值: " + threshold + "), 冷却状态: " +
-                    (warningCooldown > 0 ? "剩余" + warningCooldown/20 + "秒" : "就绪"));
+            // 输出检测统计
+            ItemCleaner.LOGGER.debug("阈值检测结果 - 总数量: " + totalCount.get() +
+                    ", 阈值: " + finalThreshold +
+                    ", 检测到的物品类型: " + detectedItems.size() +
+                    ", 冷却状态: " + (warningCooldown > 0 ? "剩余" + warningCooldown/20 + "秒" : "就绪"));
 
-            if (totalCount.get() >= threshold && warningCooldown <= 0) {
-                ItemCleaner.LOGGER.info("数量达标且冷却结束，发送清理提示");
+            // 触发条件：数量达标且冷却结束
+            if (totalCount.get() >= finalThreshold && warningCooldown <= 0) {
+                ItemCleaner.LOGGER.info("数量达标且冷却结束，发送清理提示 (数量: " + totalCount.get() + ")");
                 InteractiveCleanupHandler.sendCleanupPrompt(server, totalCount.get());
-                warningCooldown = cooldownTicks;
+                warningCooldown = finalCooldown;
+            } else if (totalCount.get() >= finalThreshold) {
+                ItemCleaner.LOGGER.debug("数量达标但冷却中，不发送提示");
+            } else if (warningCooldown <= 0) {
+                ItemCleaner.LOGGER.debug("未达阈值，不发送提示");
             }
         });
     }
 
     public void performCleanup(boolean forceNotify) {
+        // 保持原有实现不变
         if (server == null) {
             ItemCleaner.LOGGER.error("执行清理失败：服务器实例为空");
             return;
@@ -213,14 +278,15 @@ public class CleanupTimer {
         });
     }
 
-    private void sendCleanupWarning(Text message) {
+    private void sendCleanupWarning(String messageKey) {
         server.getPlayerManager().broadcast(
-                Text.translatable("itemcleaner.prefix").append(message),
+                I18n.prefixedText(messageKey),
                 false
         );
     }
 
     private void sendCleanupStats(Map<String, Object[]> cleanedItems, int total, boolean forceNotify) {
+        // 保持原有实现不变
         if (server == null) return;
 
         if (total > 0) {
