@@ -3,6 +3,7 @@ package org.stellarvan.itemcleaner;
 import net.fabricmc.api.ModInitializer;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents;
+import net.minecraft.server.MinecraftServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -12,6 +13,10 @@ public class ItemCleaner implements ModInitializer {
     public static CleanupConfig config;
     public static CleanupTimer cleanupTimer;
     private static net.minecraft.server.MinecraftServer server;
+
+    public static MinecraftServer getServer() {
+        return server;
+    }
 
     @Override
     public void onInitialize() {
@@ -29,7 +34,7 @@ public class ItemCleaner implements ModInitializer {
             CleanupCommands.register(dispatcher, registryAccess, environment);
         });
 
-        // 注册服务器启动事件（设置服务器实例）
+        // 注册服务器启动事件
         ServerLifecycleEvents.SERVER_STARTED.register(server -> {
             ItemCleaner.setServer(server);
         });
@@ -40,7 +45,8 @@ public class ItemCleaner implements ModInitializer {
             I18n.reloadTranslations();
         });
 
-        LOGGER.info("ItemCleaner 模组已加载");
+        // 修改此处日志
+        LOGGER.info("[ItemCleaner]{}", I18n.translate("itemcleaner.log.mod_loaded"));
     }
 
     public static void setServer(net.minecraft.server.MinecraftServer server) {
@@ -50,10 +56,8 @@ public class ItemCleaner implements ModInitializer {
         }
     }
 
-    // 保存配置并重新加载语言
     public static void saveConfig() {
         CleanupConfig.saveConfig(config);
-        // 配置保存后重新加载语言（如果语言设置有变化）
         I18n.reloadTranslations();
     }
 }

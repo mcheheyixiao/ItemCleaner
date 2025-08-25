@@ -41,7 +41,7 @@ ItemCleaner 是一个基于 Fabric 开发的 Minecraft 模组，旨在提供灵�
     - **服务端**：放入服务端 `mods` 文件夹，所有玩家共享清理规则
 3. 启动游戏/服务器，模组会自动生成默认配置文件
 
-##指令介绍
+### 指令介绍
 - **/cleandrops** ：显示模组的指令介绍
 - **/cleandrops help** ：发送详细的帮助说明
 - **/cleandrops clean** ：立即清理指定掉落物（依据清理列表）

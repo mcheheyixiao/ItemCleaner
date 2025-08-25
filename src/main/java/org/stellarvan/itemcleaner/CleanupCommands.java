@@ -18,70 +18,52 @@ public class CleanupCommands {
     public static void register(CommandDispatcher<ServerCommandSource> dispatcher,
                                 CommandRegistryAccess registryAccess,
                                 CommandManager.RegistrationEnvironment environment) {
-        // 主命令节点
         dispatcher.register(CommandManager.literal("cleandrops")
                 .requires(source -> source.hasPermissionLevel(2))
-                // 主命令默认提示
                 .executes(context -> {
+                    // 使用带前缀的文本
                     context.getSource().sendFeedback(
-                            () -> I18n.text("itemcleaner.help_guide"),
+                            () -> I18n.prefixedText("itemcleaner.help_guide"),
                             false
                     );
                     return 1;
                 })
-
-                // 帮助命令
                 .then(CommandManager.literal("help")
                         .executes(CleanupCommands::showHelp))
-
-                // 立即清理
                 .then(CommandManager.literal("clean")
                         .executes(CleanupCommands::executeCleanup))
-
-                // 添加手持物品
                 .then(CommandManager.literal("add")
                         .executes(CleanupCommands::addHeldItem))
-
-                // 移除物品
                 .then(CommandManager.literal("remove")
                         .then(CommandManager.argument("itemId", StringArgumentType.string())
                                 .executes(CleanupCommands::removeItem)))
-
-                // 设置间隔
                 .then(CommandManager.literal("setinterval")
                         .then(CommandManager.argument("ticks", IntegerArgumentType.integer(200))
                                 .executes(CleanupCommands::setInterval)))
-
-                // 列出物品
                 .then(CommandManager.literal("list")
                         .executes(CleanupCommands::listItems))
-
-                // 切换开关
                 .then(CommandManager.literal("toggle")
                         .then(CommandManager.literal("auto")
                                 .executes(CleanupCommands::toggleAutoCleanup))
                         .then(CommandManager.literal("threshold")
                                 .executes(CleanupCommands::toggleThresholdCheck)))
-
-                // 确认清理
                 .then(CommandManager.literal("confirm")
                         .then(CommandManager.argument("requestId", StringArgumentType.string())
                                 .then(CommandManager.argument("choice", StringArgumentType.string())
                                         .executes(context -> InteractiveCleanupHandler.handleConfirmation(context)))))
-
-                // 新增：切换语言命令（用于测试）
                 .then(CommandManager.literal("language")
                         .then(CommandManager.argument("langCode", StringArgumentType.string())
                                 .executes(CleanupCommands::setLanguage))));
     }
 
-    // 新增：设置语言
+    // 语言切换命令
     private static int setLanguage(CommandContext<ServerCommandSource> context) {
         String langCode = StringArgumentType.getString(context, "langCode");
         ItemCleaner.config.language = langCode;
         ItemCleaner.saveConfig();
         I18n.setLanguage(langCode);
 
+        // 使用带前缀的反馈
         context.getSource().sendFeedback(
                 () -> I18n.prefixedText("itemcleaner.language_updated", langCode),
                 false
@@ -89,7 +71,7 @@ public class CleanupCommands {
         return 1;
     }
 
-    // 显示帮助信息
+    // 帮助命令
     private static int showHelp(CommandContext<ServerCommandSource> context) {
         ServerCommandSource source = context.getSource();
 
@@ -102,13 +84,13 @@ public class CleanupCommands {
         source.sendFeedback(() -> I18n.text("itemcleaner.help_command_list"), false);
         source.sendFeedback(() -> I18n.text("itemcleaner.help_command_toggle_auto"), false);
         source.sendFeedback(() -> I18n.text("itemcleaner.help_command_toggle_threshold"), false);
-        source.sendFeedback(() -> I18n.text("itemcleaner.help_command_language"), false); // 新增
+        source.sendFeedback(() -> I18n.text("itemcleaner.help_command_language"), false);
         source.sendFeedback(() -> I18n.text("itemcleaner.help_note"), false);
 
         return 1;
     }
 
-    // 其他方法保持不变...
+    // 立即清理
     private static int executeCleanup(CommandContext<ServerCommandSource> context) {
         context.getSource().sendFeedback(
                 () -> I18n.prefixedText("itemcleaner.cleanup_start"),
@@ -118,6 +100,7 @@ public class CleanupCommands {
         return 1;
     }
 
+    // 添加物品
     private static int addHeldItem(CommandContext<ServerCommandSource> context) throws CommandSyntaxException {
         ServerPlayerEntity player = context.getSource().getPlayerOrThrow();
         ItemStack heldStack = player.getMainHandStack();
@@ -151,6 +134,7 @@ public class CleanupCommands {
         return 1;
     }
 
+    // 移除物品
     private static int removeItem(CommandContext<ServerCommandSource> context) {
         String itemId = StringArgumentType.getString(context, "itemId");
 
@@ -170,6 +154,7 @@ public class CleanupCommands {
         return 1;
     }
 
+    // 设置间隔
     private static int setInterval(CommandContext<ServerCommandSource> context) {
         int ticks = IntegerArgumentType.getInteger(context, "ticks");
         ItemCleaner.config.cleanupInterval = ticks;
@@ -182,6 +167,7 @@ public class CleanupCommands {
         return 1;
     }
 
+    // 列出物品
     private static int listItems(CommandContext<ServerCommandSource> context) {
         context.getSource().sendFeedback(
                 () -> I18n.text("itemcleaner.list_title"),
@@ -206,6 +192,7 @@ public class CleanupCommands {
         return 1;
     }
 
+    // 切换自动清理
     private static int toggleAutoCleanup(CommandContext<ServerCommandSource> context) {
         ItemCleaner.config.enableAutoCleanup = !ItemCleaner.config.enableAutoCleanup;
         CleanupConfig.saveConfig(ItemCleaner.config);
@@ -221,6 +208,7 @@ public class CleanupCommands {
         return 1;
     }
 
+    // 切换阈值检测
     private static int toggleThresholdCheck(CommandContext<ServerCommandSource> context) {
         ItemCleaner.config.enableThresholdCheck = !ItemCleaner.config.enableThresholdCheck;
         CleanupConfig.saveConfig(ItemCleaner.config);
