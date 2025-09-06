@@ -18,7 +18,6 @@ public class InteractiveCleanupHandler {
         return requestId++;
     }
 
-    // 发送带有Yes/No按钮的提示
     public static void sendCleanupPrompt(MinecraftServer server, int itemCount) {
         if (server == null) return;
 
