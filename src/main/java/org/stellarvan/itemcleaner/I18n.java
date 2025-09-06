@@ -101,7 +101,29 @@ public class I18n {
         serverTranslations.put("itemcleaner.log.threshold_config", "Threshold check config - Enabled: %b, Check interval: %d ticks, Trigger threshold: %d, Prompt interval: %d");
         serverTranslations.put("itemcleaner.log.loading_language", "Loading language: %s");
         serverTranslations.put("itemcleaner.log.language_loaded", "Language loaded: %s");
-        serverTranslations.put("itemcleaner.log.cleanup_range", "Cleanup range - Detection radius: %d blocks");
+        serverTranslations.put("item.itemcleaner.cleanup_hoe","clenaup_hoe");
+        serverTranslations.put("itemcleaner.log.cleanup_range","Cleanup range - Detection radius: %d blocks");
+        serverTranslations.put("itemcleaner.list_title_current","§a===== Cleanup List: %s =====");
+        serverTranslations.put("itemcleaner.list_title_specific","§a===== List: %s =====");
+        serverTranslations.put("itemcleaner.list_not_found","§cList %s not found§r");
+        serverTranslations.put("itemcleaner.list_switched","§aSwitched to cleanup list: %s§r");
+        serverTranslations.put("itemcleaner.list_created","§aCreated new cleanup list: %s§r");
+        serverTranslations.put("itemcleaner.list_already_exists","§eCleanup list %s already exists§r");
+        serverTranslations.put("itemcleaner.list_deleted","§aDeleted cleanup list: %s§r");
+        serverTranslations.put("itemcleaner.list_cannot_delete_current","§cCannot delete current active list: %s§r");
+        serverTranslations.put("itemcleaner.current_list","§aCurrent active cleanup list: %s§r");
+        serverTranslations.put("itemcleaner.all_lists_title","§a===== All Cleanup Lists =====");
+        serverTranslations.put("itemcleaner.no_lists_found","§eNo cleanup lists found§r");
+        serverTranslations.put("itemcleaner.help_command_listmanager_switch","§b/cleandrops listmanager switch <name> §7- Switch active cleanup list");
+        serverTranslations.put("itemcleaner.help_command_listmanager_create","§b/cleandrops listmanager create <name> §7- Create new cleanup list");
+        serverTranslations.put("itemcleaner.help_command_listmanager_delete","§b/cleandrops listmanager delete <name> §7- Delete cleanup list");
+        serverTranslations.put("itemcleaner.help_command_listmanager_current","§b/cleandrops listmanager current §7- Show current active list");
+        serverTranslations.put("itemcleaner.help_command_listmanager_all","§b/cleandrops listmanager all §7- Show all available lists");
+        serverTranslations.put("itemcleaner.available_lists_prompt","§aAvailable cleanup lists:");
+        serverTranslations.put("itemcleaner.all_lists_with_items_title","§a===== All Lists and Items =====");
+        serverTranslations.put("itemcleaner.help_command_listmanager_list", "§b/cleandrops listmanager list §7- View all lists and their items");
+        serverTranslations.put("itemcleaner.invalid_list_name", "Invalid list name! Name cannot contain spaces or be empty.");
+        serverTranslations.put("itemcleaner.cannot_delete_last_list", "Cannot delete the last list! At least one list must be kept.");
     }
 
     // 中文翻译
@@ -152,7 +174,29 @@ public class I18n {
         serverTranslations.put("itemcleaner.log.threshold_config", "阈值检测配置 - 是否启用: %b, 检测间隔: %d ticks, 触发阈值: %d, 提示间隔: %d");
         serverTranslations.put("itemcleaner.log.loading_language", "加载语言: %s");
         serverTranslations.put("itemcleaner.log.language_loaded", "语言加载完成: %s");
-        serverTranslations.put("itemcleaner.log.cleanup_range", "清理范围 - 检测范围: %d 格(半径)");
+        serverTranslations.put("item.itemcleaner.cleanup_hoe","清理之锄");
+        serverTranslations.put("itemcleaner.log.cleanup_range","清理范围 - 检测范围: %d 格(半径)");
+        serverTranslations.put("itemcleaner.list_title_current","§a===== 清理列表: %s =====");
+        serverTranslations.put("itemcleaner.list_title_specific","§a===== 列表: %s =====");
+        serverTranslations.put("itemcleaner.list_not_found","§c未找到列表 %s§r");
+        serverTranslations.put("itemcleaner.list_switched","§a已切换到清理列表: %s§r");
+        serverTranslations.put("itemcleaner.list_created","§a已创建新清理列表: %s§r");
+        serverTranslations.put("itemcleaner.list_already_exists","§e清理列表 %s 已存在§r");
+        serverTranslations.put("itemcleaner.list_deleted","§a已删除清理列表: %s§r");
+        serverTranslations.put("itemcleaner.list_cannot_delete_current","§c无法删除当前正在使用的列表: %s§r");
+        serverTranslations.put("itemcleaner.current_list","§a当前活跃的清理列表: %s§r");
+        serverTranslations.put("itemcleaner.all_lists_title","§a===== 所有清理列表 =====");
+        serverTranslations.put("itemcleaner.no_lists_found","§e未找到任何清理列表§r");
+        serverTranslations.put("itemcleaner.help_command_listmanager_switch","§b/cleandrops listmanager switch <名称> §7- 切换活跃的清理列表");
+        serverTranslations.put("itemcleaner.help_command_listmanager_create","§b/cleandrops listmanager create <名称> §7- 创建新的清理列表");
+        serverTranslations.put("itemcleaner.help_command_listmanager_delete","§b/cleandrops listmanager delete <名称> §7- 删除清理列表");
+        serverTranslations.put("itemcleaner.help_command_listmanager_current","§b/cleandrops listmanager current §7- 显示当前活跃的列表");
+        serverTranslations.put("itemcleaner.help_command_listmanager_all","§b/cleandrops listmanager all §7- 显示所有可用列表");
+        serverTranslations.put("itemcleaner.available_lists_prompt","§a可用的清理列表：");
+        serverTranslations.put("itemcleaner.all_lists_with_items_title","§a===== 所有列表及物品 =====");
+        serverTranslations.put("itemcleaner.help_command_listmanager_list", "§b/cleandrops listmanager list §7- 查看所有列表及包含的物品");
+        serverTranslations.put("itemcleaner.invalid_list_name", "无效的列表名称！名称不能包含空格或为空。");
+        serverTranslations.put("itemcleaner.cannot_delete_last_list", "无法删除最后一个列表！至少需要保留一个列表。");
     }
 
     // 获取翻译文本
@@ -232,7 +276,4 @@ public class I18n {
         reloadTranslations();
     }
 
-    public static String getCurrentLanguage() {
-        return currentLang;
-    }
 }

@@ -26,33 +26,14 @@ public class CleanupTimer {
 
     public void setServer(MinecraftServer server) {
         this.server = server;
-        // 修改服务器实例设置日志
-        ItemCleaner.LOGGER.info("[ItemCleaner]{}", I18n.translate("itemcleaner.log.server_instance_set"));
-
+        ItemCleaner.LOGGER.info("服务器实例已设置");
         if (server != null) {
             int cooldownSeconds = ItemCleaner.config.warningCooldown / 20;
-            // 修改清理配置日志
-            ItemCleaner.LOGGER.info("[ItemCleaner]{}", String.format(
-                    I18n.translate("itemcleaner.log.cleanup_config"),
-                    ItemCleaner.config.enableAutoCleanup,
-                    cooldownSeconds,
-                    ItemCleaner.config.warningCooldown
-            ));
-
-            // 修改阈值检测配置日志
-            ItemCleaner.LOGGER.info("[ItemCleaner]{}", String.format(
-                    I18n.translate("itemcleaner.log.threshold_config"),
-                    ItemCleaner.config.enableThresholdCheck,
-                    ItemCleaner.config.thresholdCheckInterval,
-                    ItemCleaner.config.itemThreshold,
-                    ItemCleaner.config.warningCooldown
-            ));
-
-            // 清理范围日志
-            ItemCleaner.LOGGER.info("[ItemCleaner]{}", I18n.translate(
-                    "itemcleaner.log.cleanup_range",
-                    ItemCleaner.config.cleanRadius
-            ));
+            ItemCleaner.LOGGER.info("当前清理配置 - 提示冷却时间: " + cooldownSeconds + "秒 (" +
+                    ItemCleaner.config.warningCooldown + "ticks)");
+            ItemCleaner.LOGGER.info("阈值检测配置 - 启用: " + ItemCleaner.config.enableThresholdCheck +
+                    ", 检测间隔: " + ItemCleaner.config.thresholdCheckInterval + "ticks, " +
+                    "触发阈值: " + ItemCleaner.config.itemThreshold);
         }
     }
 
@@ -74,15 +55,13 @@ public class CleanupTimer {
             warningCooldown--;
         }
 
-        // 数量检测（如果启用）- 修复：添加调试日志并确保checkInterval有效
+        // 数量检测（如果启用）
         if (ItemCleaner.config.enableThresholdCheck) {
-            // 确保检测间隔有效
             if (checkInterval <= 0) {
-                checkInterval = 200; // 默认200ticks(10秒)
+                checkInterval = 200;
                 ItemCleaner.LOGGER.warn("阈值检测间隔配置无效，使用默认值: " + checkInterval + "ticks");
             }
 
-            // 新增：跟踪计数器状态
             if (thresholdCheckCounter % 100 == 0) {
                 ItemCleaner.LOGGER.debug("阈值检测计数器 - 当前: " + thresholdCheckCounter +
                         ", 间隔: " + checkInterval);
@@ -95,7 +74,7 @@ public class CleanupTimer {
             }
         }
 
-        // 定时清理
+        // 定时清理（如果启用）
         if (ItemCleaner.config.enableAutoCleanup && tickCounter >= interval) {
             ItemCleaner.LOGGER.info("达到清理间隔，执行定时清理");
             performCleanup(true);
@@ -130,10 +109,9 @@ public class CleanupTimer {
         int threshold = ItemCleaner.config.itemThreshold;
         int cooldownTicks = ItemCleaner.config.warningCooldown;
 
-        // 验证配置有效性
         if (threshold <= 0) {
-            ItemCleaner.LOGGER.warn("阈值配置无效(" + threshold + ")，使用默认值: 100");
             threshold = 100;
+            ItemCleaner.LOGGER.warn("阈值配置无效(" + threshold + ")，使用默认值: 100");
         }
         if (cleanRadius <= 0) {
             cleanRadius = 48;
@@ -145,7 +123,7 @@ public class CleanupTimer {
             ItemCleaner.LOGGER.debug("Y轴范围无效，使用默认值: " + yMin + "~" + yMax);
         }
         if (cooldownTicks <= 0) {
-            cooldownTicks = 1200; // 默认60秒
+            cooldownTicks = 1200;
             ItemCleaner.LOGGER.debug("警告冷却无效，使用默认值: " + cooldownTicks + "ticks");
         }
 
@@ -158,10 +136,9 @@ public class CleanupTimer {
         server.execute(() -> {
             AtomicInteger totalCount = new AtomicInteger(0);
             Set<ItemEntity> countedEntities = new HashSet<>();
-            Set<String> detectedItems = new HashSet<>(); // 跟踪检测到的物品ID
+            Set<String> detectedItems = new HashSet<>();
 
             server.getWorlds().forEach(world -> {
-                // 新增：验证世界是否加载
                 if (world == null) {
                     ItemCleaner.LOGGER.debug("跳过空世界的物品检测");
                     return;
@@ -174,21 +151,20 @@ public class CleanupTimer {
                             playerPos.x + finalRadius, finalYMax, playerPos.z + finalRadius
                     );
 
-                    // 新增：记录检测范围
-                    if (totalCount.get() == 0) { // 只输出一次
+                    if (totalCount.get() == 0) {
                         ItemCleaner.LOGGER.debug("检测范围 - 玩家: " + player.getName().getString() +
                                 ", 位置: (" + (int)playerPos.x + "," + (int)playerPos.y + "," + (int)playerPos.z + "), " +
                                 "半径: " + finalRadius + ", Y范围: " + finalYMin + "~" + finalYMax);
                     }
 
-                    // 收集该范围内的所有物品实体
+                    // 修复：使用当前活跃列表替代原来的itemsToClean
                     for (ItemEntity item : world.getEntitiesByClass(
                             ItemEntity.class, playerRange, entity -> true)) {
                         if (countedEntities.contains(item)) continue;
 
                         String itemId = Registries.ITEM.getId(item.getStack().getItem()).toString();
-                        // 检查物品是否在清理列表中
-                        if (ItemCleaner.config.itemsToClean.contains(itemId)) {
+                        // 关键修复：使用getActiveCleanupList()获取当前列表
+                        if (ItemCleaner.config.getActiveCleanupList().contains(itemId)) {
                             int count = item.getStack().getCount();
                             totalCount.addAndGet(count);
                             countedEntities.add(item);
@@ -200,13 +176,11 @@ public class CleanupTimer {
                 }
             });
 
-            // 输出检测统计
             ItemCleaner.LOGGER.debug("阈值检测结果 - 总数量: " + totalCount.get() +
                     ", 阈值: " + finalThreshold +
                     ", 检测到的物品类型: " + detectedItems.size() +
                     ", 冷却状态: " + (warningCooldown > 0 ? "剩余" + warningCooldown/20 + "秒" : "就绪"));
 
-            // 触发条件
             if (totalCount.get() >= finalThreshold && warningCooldown <= 0) {
                 ItemCleaner.LOGGER.info("数量达标且冷却结束，发送清理提示 (数量: " + totalCount.get() + ")");
                 InteractiveCleanupHandler.sendCleanupPrompt(server, totalCount.get());
@@ -220,7 +194,6 @@ public class CleanupTimer {
     }
 
     public void performCleanup(boolean forceNotify) {
-        // 保持原有实现不变
         if (server == null) {
             ItemCleaner.LOGGER.error("执行清理失败：服务器实例为空");
             return;
@@ -270,7 +243,8 @@ public class CleanupTimer {
                         if (cleanedEntities.contains(item)) continue;
 
                         String itemId = Registries.ITEM.getId(item.getStack().getItem()).toString();
-                        if (ItemCleaner.config.itemsToClean.contains(itemId)) {
+                        // 关键修复：使用当前活跃列表
+                        if (ItemCleaner.config.getActiveCleanupList().contains(itemId)) {
                             int count = item.getStack().getCount();
                             String itemName = item.getStack().getName().getString();
 
@@ -304,7 +278,6 @@ public class CleanupTimer {
     }
 
     private void sendCleanupStats(Map<String, Object[]> cleanedItems, int total, boolean forceNotify) {
-        // 保持原有实现不变
         if (server == null) return;
 
         if (total > 0) {
